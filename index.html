@@ -188,6 +188,22 @@ code{background:var(--surface2);border:1px solid var(--border);border-radius:4px
 .auto-summary-count{margin-left:auto;font-size:12px;font-weight:600;white-space:nowrap}
 .auto-summary-copy{font-size:12px;color:var(--text2)}
 
+/* REPORT AND BACKUP TOOLS */
+.report-tools{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.5rem}
+.report-tools-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:.875rem}
+.report-tools-title h2{font-size:14px;font-weight:600}
+.report-tools-title p{font-size:12px;color:var(--text2);margin-top:2px}
+.report-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.report-btn{border:1px solid var(--border2);border-radius:7px;background:var(--surface);color:var(--text);padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer;min-height:38px}
+.report-btn:hover{background:var(--surface2);border-color:var(--accent)}
+.report-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.report-btn.primary:hover{background:#6d28d9}
+.report-btn.danger{color:var(--fail);border-color:var(--fail-border)}
+.report-note{font-size:11px;color:var(--text3);margin-top:.75rem}
+.import-input{display:none}
+.site-toast{position:fixed;left:50%;bottom:22px;z-index:300;transform:translate(-50%,12px);background:var(--text);color:#fff;border-radius:7px;padding:9px 14px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;visibility:hidden;transition:opacity .2s,transform .2s,visibility .2s;max-width:calc(100vw - 32px);text-align:center}
+.site-toast.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
+
 /* NAME MODAL */
 .moverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:999;align-items:center;justify-content:center}
 .moverlay.open{display:flex}
@@ -233,13 +249,14 @@ code{background:var(--surface2);border:1px solid var(--border);border-radius:4px
   .donut{width:170px;height:170px}
   .donut::after{width:110px;height:110px}
   .back-to-top{right:14px;bottom:14px}
+  .report-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 @media(max-width:600px){
   body{font-size:14px}
   .hdr h1{font-size:14px}
   .hdr p{font-size:11px}
-  .dashboard,.auto-summary,.bugs{padding:1rem}
+  .dashboard,.auto-summary,.bugs,.report-tools{padding:1rem}
   .dashboard-head{display:block}
   .dashboard-head .pill{display:block;margin-top:10px;width:100%;border-radius:8px}
   .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -256,6 +273,8 @@ code{background:var(--surface2);border:1px solid var(--border);border-radius:4px
   .auto-summary-head{align-items:flex-start;flex-wrap:wrap}
   .auto-summary-subtitle{width:100%}
   .auto-summary-count{margin-left:0}
+  .report-tools-head{display:block}
+  .report-actions{grid-template-columns:1fr}
   .bug-row{display:grid;grid-template-columns:auto 1fr}
   .add-cmt{flex-direction:column}
   .cmt-sub{align-self:stretch}
@@ -268,7 +287,7 @@ code{background:var(--surface2);border:1px solid var(--border);border-radius:4px
   .hdr-right{grid-template-columns:repeat(2,minmax(0,1fr))}
   .name-btn{grid-column:1 / -1}
   .main{padding:.75rem}
-  .dashboard,.auto-summary,.bugs{border-radius:9px;padding:.875rem}
+  .dashboard,.auto-summary,.bugs,.report-tools{border-radius:9px;padding:.875rem}
   .donut{width:150px;height:150px}
   .donut::after{width:96px;height:96px}
   .donut-percent{font-size:28px}
@@ -323,6 +342,8 @@ code{background:var(--surface2);border:1px solid var(--border);border-radius:4px
 </div>
 
 <button class="back-to-top" id="back-to-top" type="button" title="Back to top" aria-label="Back to top">↑</button>
+
+<div class="site-toast" id="site-toast" role="status" aria-live="polite"></div>
 
 <script>
 const SK = 'roblox_cf_v4';
@@ -470,8 +491,8 @@ const SYSTEMS = [
   {id:1,place:'lobby',title:'Player Joins & Data Loads',
    what:'When a player joins, the server loads their saved data (coins, level, skills, weapons, daily quests, achievements) and sends it to the screen.',
    scripts:['LobbyPlayerDataService (Server)','PlayerDataLobbyHUD_Client (Client)','PlayerDataMainGuiBinder (GUI)'],
-   flow:['Player joins → server loads their DataStore data','New player → default data (100,000 coins, Dash skill, M16)','Returning player → load saved data + migrate old schema if needed','Server sends PlayerDataSnapshot remote to client','Client updates HUD (level, EXP bar, coins, rank, stats)','Data auto-saves every 90 seconds + when player leaves'],
-   checks:['Join with NEW account → get default 100,000 coins and M16 weapon','Join with EXISTING account → saved data loads correctly','HUD shows correct level, EXP bar, coins, and rank','Leave and rejoin → data is still saved correctly'],
+   flow:['Player joins → server loads their DataStore data','New player → default data (5,000 coins, Dash skill, Tar21, P1911, Knife)','Returning player → load saved data + migrate old schema if needed','Server sends PlayerDataSnapshot remote to client','Client updates HUD (level, EXP bar, coins, rank, stats)','Data auto-saves every 90 seconds + when player leaves'],
+   checks:['Join with NEW account → get default 5,000 coins, Dash skill, Tar21, P1911, and Knife','Join with EXISTING account → saved data loads correctly','HUD shows correct level, EXP bar, coins, and rank','Leave and rejoin → data is still saved correctly'],
    autoIds:[],warn:null,verify:false},
 
   {id:2,place:'lobby',title:'Collision (Players Pass Through)',
@@ -765,6 +786,248 @@ function getDashboardStats() {
   return stats;
 }
 
+function cleanMarkdown(value) {
+  return String(value == null ? '' : value)
+    .replace(/\r/g, '')
+    .replace(/\|/g, '\\|')
+    .trim();
+}
+
+function localDateStamp(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function statusText(status) {
+  return {
+    pass: 'Working',
+    fail: 'Broken',
+    warn: 'Has issues',
+    todo: 'Not tested'
+  }[status] || 'Not tested';
+}
+
+function priorityText(status) {
+  return {
+    fail: 'Critical',
+    warn: 'High',
+    todo: 'Pending',
+    pass: 'Complete'
+  }[status] || 'Pending';
+}
+
+function systemHasProblem(system, cardState) {
+  const status = cardState.status || 'todo';
+  const comments = cardState.comments || [];
+  const autoFailed = system.autoIds
+    .map(id => AUTO_CHECKS[id])
+    .filter(Boolean)
+    .some(item => !item.pass);
+  return status === 'fail' || status === 'warn' || comments.length > 0 || autoFailed;
+}
+
+function buildMarkdownReport(problemsOnly) {
+  const state = load();
+  const stats = getDashboardStats();
+  const tester = getName();
+  const now = new Date();
+  const selectedSystems = SYSTEMS.filter(system => {
+    return !problemsOnly || systemHasProblem(system, state[system.id] || {});
+  });
+  const critical = SYSTEMS.filter(s => (state[s.id] || {}).status === 'fail').length;
+  const high = SYSTEMS.filter(s => (state[s.id] || {}).status === 'warn').length;
+  const lines = [
+    `# Roblox Flow Test Report${problemsOnly ? ' - Problems Only' : ''}`,
+    '',
+    `- **Game:** Multiplayer Shooter (Lobby + yshibuya)`,
+    `- **Tester:** ${cleanMarkdown(tester)}`,
+    `- **Exported:** ${now.toLocaleString()}`,
+    `- **Manual progress:** ${stats.done}/${stats.total} (${stats.percent}%)`,
+    `- **Systems:** ${stats.pass} working, ${stats.fail} broken, ${stats.warn} with issues, ${stats.todo} not tested`,
+    `- **Automatic scan:** ${autoPass}/${autoTotal} passed`,
+    `- **Priority:** ${critical} critical, ${high} high`,
+    '',
+    '## Overview',
+    '',
+    `Lobby checklist: ${stats.places.lobby.done}/${stats.places.lobby.total}`,
+    '',
+    `yshibuya checklist: ${stats.places.game.done}/${stats.places.game.total}`,
+    '',
+    '## Known Issues From Automatic Scan',
+    ''
+  ];
+
+  BUGS.forEach(bug => {
+    lines.push(
+      `### ${bug.sev === 'high' ? 'HIGH' : 'MEDIUM'} - ${cleanMarkdown(bug.title)}`,
+      '',
+      cleanMarkdown(bug.detail),
+      '',
+      `**Location:** ${cleanMarkdown(bug.where)}`,
+      ''
+    );
+  });
+
+  lines.push('## System Results', '');
+
+  if (selectedSystems.length === 0) {
+    lines.push('No broken systems, issue systems, comments, or automatic scan failures were recorded.', '');
+  }
+
+  selectedSystems.forEach(system => {
+    const cardState = state[system.id] || {};
+    const status = cardState.status || 'todo';
+    const checks = cardState.checks || [];
+    const comments = cardState.comments || [];
+    const done = checks.filter(Boolean).length;
+    const autoChecks = system.autoIds.map(id => AUTO_CHECKS[id]).filter(Boolean);
+
+    lines.push(
+      `### ${system.id}. ${cleanMarkdown(system.title)}`,
+      '',
+      `- **Place:** ${system.place === 'lobby' ? 'Lobby' : 'yshibuya'}`,
+      `- **Status:** ${statusText(status)}`,
+      `- **Priority:** ${priorityText(status)}`,
+      `- **Manual progress:** ${done}/${system.checks.length}`,
+      '',
+      '**What it does**',
+      '',
+      cleanMarkdown(system.what),
+      '',
+      '**Scripts involved**',
+      ''
+    );
+
+    system.scripts.forEach(script => lines.push(`- \`${cleanMarkdown(script)}\``));
+    lines.push('', '**Flow**', '');
+    system.flow.forEach((step, index) => lines.push(`${index + 1}. ${cleanMarkdown(step)}`));
+
+    lines.push('', '**Manual checklist**', '');
+    system.checks.forEach((check, index) => {
+      lines.push(`- [${checks[index] ? 'x' : ' '}] ${cleanMarkdown(check)}`);
+    });
+
+    if (autoChecks.length > 0) {
+      lines.push('', '**Automatic scan results**', '');
+      autoChecks.forEach(item => {
+        lines.push(`- ${item.pass ? 'PASS' : 'FAIL'} [${cleanMarkdown(item.t)}] ${cleanMarkdown(item.l)}`);
+      });
+    }
+
+    if (system.warn) {
+      lines.push('', '**System warning**', '', cleanMarkdown(system.warn));
+    }
+
+    lines.push('', '**Tester comments**', '');
+    if (comments.length === 0) {
+      lines.push('- No comments');
+    } else {
+      comments.forEach(comment => {
+        const text = cleanMarkdown(comment.text).replace(/\n/g, '\n  ');
+        lines.push(`- **${cleanMarkdown(comment.author)}** (${cleanMarkdown(comment.time)}): ${text}`);
+      });
+    }
+
+    lines.push('', '---', '');
+  });
+
+  lines.push(
+    '## Suggested Next Action',
+    '',
+    '1. Fix Broken systems first.',
+    '2. Review systems marked Has issues.',
+    '3. Investigate automatic scan FAIL results.',
+    '4. Retest unfinished checklist items after fixes.',
+    ''
+  );
+
+  return lines.join('\n');
+}
+
+function downloadTextFile(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function showToast(message) {
+  const toast = document.getElementById('site-toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove('show'), 2600);
+}
+
+function exportMarkdown(problemsOnly) {
+  const suffix = problemsOnly ? 'problems' : 'full-report';
+  const filename = `roblox-flow-${suffix}-${localDateStamp()}.md`;
+  downloadTextFile(filename, buildMarkdownReport(problemsOnly), 'text/markdown;charset=utf-8');
+  showToast(`${problemsOnly ? 'Problems report' : 'Full report'} downloaded.`);
+}
+
+function exportBackup() {
+  const backup = {
+    format: 'roblox-checkflow-backup',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    tester: getName(),
+    storageKey: SK,
+    state: load()
+  };
+  const filename = `roblox-flow-backup-${localDateStamp()}.json`;
+  downloadTextFile(filename, JSON.stringify(backup, null, 2), 'application/json;charset=utf-8');
+  showToast('Backup downloaded.');
+}
+
+function importBackup(event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const importedState = parsed && parsed.format === 'roblox-checkflow-backup'
+        ? parsed.state
+        : parsed;
+
+      if (!importedState || typeof importedState !== 'object' || Array.isArray(importedState)) {
+        throw new Error('Invalid backup structure');
+      }
+      if (!confirm('Import this backup and replace the current checklist progress?')) {
+        input.value = '';
+        return;
+      }
+
+      save(importedState);
+      if (parsed.tester && parsed.tester !== 'Unknown') {
+        localStorage.setItem('roblox_un', String(parsed.tester).slice(0, 30));
+      }
+      showToast('Backup imported. Reloading...');
+      setTimeout(() => location.reload(), 500);
+    } catch {
+      showToast('This backup file is not valid.');
+      input.value = '';
+    }
+  };
+
+  reader.onerror = () => {
+    showToast('Could not read this backup file.');
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
 function buildMain() {
   const m = document.getElementById('main');
   let h = '';
@@ -805,6 +1068,23 @@ function buildMain() {
         <p class="dashboard-note" id="dashboard-note">${ds.done} checklist items finished from ${ds.total}. Status cards below count complete systems.</p>
       </div>
     </div>
+  </section>`;
+
+  h += `<section class="report-tools" aria-label="Report and backup tools">
+    <div class="report-tools-head">
+      <div class="report-tools-title">
+        <h2>Report & Backup</h2>
+        <p>Export your test results for Codex, or move progress to another browser.</p>
+      </div>
+    </div>
+    <div class="report-actions">
+      <button class="report-btn primary" type="button" onclick="exportMarkdown(false)">Export Full Report (.md)</button>
+      <button class="report-btn" type="button" onclick="exportMarkdown(true)">Problems Only (.md)</button>
+      <button class="report-btn" type="button" onclick="exportBackup()">Export Backup (.json)</button>
+      <button class="report-btn danger" type="button" onclick="document.getElementById('import-backup').click()">Import Backup</button>
+    </div>
+    <input class="import-input" id="import-backup" type="file" accept=".json,application/json" onchange="importBackup(event)">
+    <p class="report-note">Markdown is best for sending to Codex. JSON is best for exact backup and restore.</p>
   </section>`;
 
   // Summary

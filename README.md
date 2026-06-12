@@ -35,6 +35,9 @@ Follow the prompts → free link!
 - Sidebar with color dots showing status at a glance
 - Progress counter in header
 - Set your name so team knows who commented
+- Export a full Markdown report for Codex
+- Export a problems-only Markdown report
+- Export and import JSON backups for exact checklist restore
 
 ## Notes
 - Data saves in the browser (localStorage)
