@@ -201,6 +201,12 @@ code{background:var(--surface2);border:1px solid var(--border);border-radius:4px
 .report-btn.danger{color:var(--fail);border-color:var(--fail-border)}
 .report-note{font-size:11px;color:var(--text3);margin-top:.75rem}
 .import-input{display:none}
+.shared-status{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;margin-bottom:.875rem;font-size:12px;color:var(--text2)}
+.shared-dot{width:8px;height:8px;border-radius:50%;background:var(--border2);flex-shrink:0}
+.shared-dot.online{background:var(--pass)}
+.shared-dot.loading{background:var(--warn)}
+.shared-dot.offline{background:var(--fail)}
+.shared-status-text{flex:1;min-width:0}
 .site-toast{position:fixed;left:50%;bottom:22px;z-index:300;transform:translate(-50%,12px);background:var(--text);color:#fff;border-radius:7px;padding:9px 14px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;visibility:hidden;transition:opacity .2s,transform .2s,visibility .2s;max-width:calc(100vw - 32px);text-align:center}
 .site-toast.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
 
@@ -734,6 +740,10 @@ const getName = () => localStorage.getItem('roblox_un') || 'Unknown';
 const autoValues = Object.values(AUTO_CHECKS);
 const autoPass = autoValues.filter(v => v.pass).length;
 const autoTotal = autoValues.length;
+let sharedReportMeta = {
+  status: 'loading',
+  message: 'Checking shared progress...'
+};
 
 // ─── BUILD PAGE ───────────────────────────────────────────────────────────────
 function buildPage() {
@@ -828,18 +838,20 @@ function systemHasProblem(system, cardState) {
   return status === 'fail' || status === 'warn' || comments.length > 0 || autoFailed;
 }
 
-function buildMarkdownReport(problemsOnly) {
+function buildMarkdownReport(problemsOnly, placeFilter = null) {
   const state = load();
   const stats = getDashboardStats();
   const tester = getName();
   const now = new Date();
   const selectedSystems = SYSTEMS.filter(system => {
-    return !problemsOnly || systemHasProblem(system, state[system.id] || {});
+    const matchesPlace = !placeFilter || system.place === placeFilter;
+    const matchesProblem = !problemsOnly || systemHasProblem(system, state[system.id] || {});
+    return matchesPlace && matchesProblem;
   });
   const critical = SYSTEMS.filter(s => (state[s.id] || {}).status === 'fail').length;
   const high = SYSTEMS.filter(s => (state[s.id] || {}).status === 'warn').length;
   const lines = [
-    `# Roblox Flow Test Report${problemsOnly ? ' - Problems Only' : ''}`,
+    `# Roblox Flow Test Report${placeFilter ? ` - ${placeFilter === 'lobby' ? 'Lobby' : 'yshibuya'}` : ''}${problemsOnly ? ' - Problems Only' : ''}`,
     '',
     `- **Game:** Multiplayer Shooter (Lobby + yshibuya)`,
     `- **Tester:** ${cleanMarkdown(tester)}`,
@@ -967,11 +979,14 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.remove('show'), 2600);
 }
 
-function exportMarkdown(problemsOnly) {
-  const suffix = problemsOnly ? 'problems' : 'full-report';
+function exportMarkdown(problemsOnly, placeFilter = null) {
+  const suffix = placeFilter
+    ? `${placeFilter === 'lobby' ? 'lobby' : 'yshibuya'}-${problemsOnly ? 'problems' : 'report'}`
+    : (problemsOnly ? 'problems' : 'full-report');
   const filename = `roblox-flow-${suffix}-${localDateStamp()}.md`;
-  downloadTextFile(filename, buildMarkdownReport(problemsOnly), 'text/markdown;charset=utf-8');
-  showToast(`${problemsOnly ? 'Problems report' : 'Full report'} downloaded.`);
+  downloadTextFile(filename, buildMarkdownReport(problemsOnly, placeFilter), 'text/markdown;charset=utf-8');
+  const label = placeFilter ? (placeFilter === 'lobby' ? 'Lobby report' : 'yshibuya report') : (problemsOnly ? 'Problems report' : 'Full report');
+  showToast(`${label} downloaded.`);
 }
 
 function exportBackup() {
@@ -1028,6 +1043,158 @@ function importBackup(event) {
   reader.readAsText(file);
 }
 
+function parseMarkdownReport(report) {
+  const parsedState = {};
+  const sectionPattern = /^### (\d+)\. .+$/gm;
+  const matches = [...report.matchAll(sectionPattern)];
+
+  matches.forEach((match, index) => {
+    const systemId = Number(match[1]);
+    const system = SYSTEMS.find(item => item.id === systemId);
+    if (!system) return;
+
+    const start = match.index;
+    const end = index + 1 < matches.length ? matches[index + 1].index : report.length;
+    const section = report.slice(start, end);
+    const statusMatch = section.match(/^- \*\*Status:\*\* (.+)$/m);
+    const statusMap = {
+      Working: 'pass',
+      Broken: 'fail',
+      'Has issues': 'warn',
+      'Not tested': 'todo'
+    };
+    const checklistBlock = section.match(/\*\*Manual checklist\*\*\s*\n([\s\S]*?)(?=\n\*\*|\n---|$)/);
+    const checklistLines = checklistBlock
+      ? [...checklistBlock[1].matchAll(/^- \[([xX ])\] (.+)$/gm)]
+      : [];
+    const commentsBlock = section.match(/\*\*Tester comments\*\*\s*\n([\s\S]*?)(?=\n---|$)/);
+    const comments = [];
+
+    if (commentsBlock && !commentsBlock[1].includes('- No comments')) {
+      const commentPattern = /^- \*\*(.+?)\*\* \((.+?)\): (.*)$/gm;
+      for (const comment of commentsBlock[1].matchAll(commentPattern)) {
+        comments.push({
+          author: comment[1].trim(),
+          time: comment[2].trim(),
+          text: comment[3].trim()
+        });
+      }
+    }
+
+    parsedState[systemId] = {
+      status: statusMap[(statusMatch && statusMatch[1].trim()) || 'Not tested'] || 'todo',
+      checks: system.checks.map((_, checkIndex) => {
+        return checklistLines[checkIndex] ? checklistLines[checkIndex][1].toLowerCase() === 'x' : false;
+      }),
+      comments
+    };
+  });
+
+  return parsedState;
+}
+
+function setSharedStatus(status, message) {
+  sharedReportMeta = { status, message };
+  const dot = document.getElementById('shared-dot');
+  const text = document.getElementById('shared-status-text');
+  if (dot) dot.className = `shared-dot ${status}`;
+  if (text) text.textContent = message;
+}
+
+function formatSharedTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'unknown time' : date.toLocaleString();
+}
+
+async function refreshSharedReport(manual = false) {
+  setSharedStatus('loading', 'Loading shared progress...');
+
+  try {
+    const response = await fetch(`/api/shared-report?t=${Date.now()}`, {
+      cache: 'no-store'
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Shared progress is unavailable.');
+    }
+    if (!data.available) {
+      setSharedStatus('offline', 'No shared report published yet. Local progress is active.');
+      if (manual) showToast('No shared report has been published yet.');
+      return false;
+    }
+
+    const parsed = parseMarkdownReport(data.report);
+    if (Object.keys(parsed).length === 0) {
+      throw new Error('The shared report has no system results.');
+    }
+
+    save(parsed);
+    localStorage.setItem('roblox_cf_shared_updated_at', data.updatedAt || '');
+    setSharedStatus('online', `Shared report loaded. Updated ${formatSharedTime(data.updatedAt)}.`);
+
+    if (manual) {
+      buildPage();
+      showToast('Shared progress refreshed.');
+    }
+    return true;
+  } catch (error) {
+    setSharedStatus('offline', `${error.message} Local progress is active.`);
+    if (manual) showToast(error.message);
+    return false;
+  }
+}
+
+async function publishSharedReport(event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+  if (!file) return;
+
+  try {
+    const report = await file.text();
+    if (!report.startsWith('# Roblox Flow Test Report')) {
+      throw new Error('Please choose a Roblox Flow Test Report Markdown file.');
+    }
+
+    const parsed = parseMarkdownReport(report);
+    if (Object.keys(parsed).length !== SYSTEMS.length) {
+      throw new Error('Publish the complete report with all 32 systems.');
+    }
+
+    const updateKey = prompt('Enter the shared progress update password:');
+    if (!updateKey) {
+      input.value = '';
+      return;
+    }
+
+    setSharedStatus('loading', 'Publishing shared report...');
+    const response = await fetch('/api/shared-report', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'X-Update-Key': updateKey
+      },
+      body: report
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Could not publish the report.');
+    }
+
+    save(parsed);
+    localStorage.setItem('roblox_cf_shared_updated_at', data.updatedAt || '');
+    setSharedStatus('online', `Shared report published ${formatSharedTime(data.updatedAt)}.`);
+    buildPage();
+    showToast('Shared progress published for everyone.');
+  } catch (error) {
+    setSharedStatus('offline', error.message);
+    showToast(error.message);
+  } finally {
+    input.value = '';
+  }
+}
+
 function buildMain() {
   const m = document.getElementById('main');
   let h = '';
@@ -1073,18 +1240,27 @@ function buildMain() {
   h += `<section class="report-tools" aria-label="Report and backup tools">
     <div class="report-tools-head">
       <div class="report-tools-title">
-        <h2>Report & Backup</h2>
-        <p>Export your test results for Codex, or move progress to another browser.</p>
+        <h2>Shared Progress, Report & Backup</h2>
+        <p>Publish one Markdown report so everyone sees the same progress.</p>
       </div>
     </div>
+    <div class="shared-status">
+      <span class="shared-dot ${sharedReportMeta.status}" id="shared-dot"></span>
+      <span class="shared-status-text" id="shared-status-text">${sharedReportMeta.message}</span>
+    </div>
     <div class="report-actions">
+      <button class="report-btn primary" type="button" onclick="document.getElementById('publish-report').click()">Publish Shared Report</button>
+      <button class="report-btn" type="button" onclick="refreshSharedReport(true)">Refresh Shared Progress</button>
       <button class="report-btn primary" type="button" onclick="exportMarkdown(false)">Export Full Report (.md)</button>
       <button class="report-btn" type="button" onclick="exportMarkdown(true)">Problems Only (.md)</button>
+      <button class="report-btn" type="button" onclick="exportMarkdown(false, 'lobby')">Export Lobby Report</button>
+      <button class="report-btn" type="button" onclick="exportMarkdown(false, 'game')">Export yshibuya Report</button>
       <button class="report-btn" type="button" onclick="exportBackup()">Export Backup (.json)</button>
       <button class="report-btn danger" type="button" onclick="document.getElementById('import-backup').click()">Import Backup</button>
     </div>
+    <input class="import-input" id="publish-report" type="file" accept=".md,text/markdown,text/plain" onchange="publishSharedReport(event)">
     <input class="import-input" id="import-backup" type="file" accept=".json,application/json" onchange="importBackup(event)">
-    <p class="report-note">Markdown is best for sending to Codex. JSON is best for exact backup and restore.</p>
+    <p class="report-note">Publishing needs your team update password. Visitors can view shared progress without a password.</p>
   </section>`;
 
   // Summary
@@ -1424,7 +1600,12 @@ const sn = localStorage.getItem('roblox_un');
 if (sn) document.getElementById('cur-name').textContent = sn;
 else setTimeout(openNameModal, 600);
 
-buildPage();
+async function initializePage() {
+  await refreshSharedReport(false);
+  buildPage();
+}
+
+initializePage();
 </script>
 </body>
 </html>
